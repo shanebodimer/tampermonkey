@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Todoist Filter Tidy
 // @namespace    http://tampermonkey.net/
-// @version      2025-10-13
+// @version      1
 // @description  try to take over the world!
 // @author       You
 // @match        https://app.todoist.com/app/filter/personal*
 // @match        https://app.todoist.com/app/filter/workomode*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=todoist.com
 // @grant        none
+// @updateURL    https://raw.githubusercontent.com/shanebodimer/tampermonkey/refs/heads/main/todoistfiltertidy.js
 // ==/UserScript==
 (function() {
     'use strict';
