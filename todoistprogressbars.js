@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         Todoist Progress Bars
 // @namespace    http://tampermonkey.net/
-// @version      2025-10-14
+// @version      1
 // @description  Add progress bars to tasks with subtasks
 // @author       You
 // @match        https://app.todoist.com/app/filter/personal*
 // @match        https://app.todoist.com/app/filter/workomode*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=todoist.com
 // @grant        none
+// @updateURL    https://raw.githubusercontent.com/shanebodimer/tampermonkey/refs/heads/main/todoistprogressbars.js
+// @downloadURL  https://raw.githubusercontent.com/shanebodimer/tampermonkey/refs/heads/main/todoistprogressbars.js
 // ==/UserScript==
 
 (function() {

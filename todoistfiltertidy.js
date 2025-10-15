@@ -9,7 +9,7 @@
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=todoist.com
 // @grant        none
 // @updateURL    https://raw.githubusercontent.com/shanebodimer/tampermonkey/refs/heads/main/todoistfiltertidy.js
-// @downloadURL    https://raw.githubusercontent.com/shanebodimer/tampermonkey/refs/heads/main/todoistfiltertidy.js
+// @downloadURL  https://raw.githubusercontent.com/shanebodimer/tampermonkey/refs/heads/main/todoistfiltertidy.js
 // ==/UserScript==
 (function() {
     'use strict';
