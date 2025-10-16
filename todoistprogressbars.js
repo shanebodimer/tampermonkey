@@ -1,17 +1,16 @@
 // ==UserScript==
 // @name         Todoist Progress Bars
 // @namespace    http://tampermonkey.net/
-// @version      1
+// @version      1.0
 // @description  Add progress bars to tasks with subtasks
 // @author       You
-// @match        https://app.todoist.com/app/filter/personal*
-// @match        https://app.todoist.com/app/filter/workomode*
+// @match        https://app.todoist.com/app/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=todoist.com
 // @grant        none
 // @updateURL    https://raw.githubusercontent.com/shanebodimer/tampermonkey/refs/heads/main/todoistprogressbars.js
 // @downloadURL  https://raw.githubusercontent.com/shanebodimer/tampermonkey/refs/heads/main/todoistprogressbars.js
-// ==/UserScript==
 
+// ==/UserScript==
 (function() {
     'use strict';
 
@@ -39,15 +38,15 @@
 
     // Function to add progress bars
     function addProgressBars() {
-        // Find all subtask indicators by looking for the SVG with aria-label containing "sub-tasks"
-        const subtaskSvgs = document.querySelectorAll('svg[aria-label*="sub-tasks"]');
+        // Find all subtask indicators by looking for the SVG with aria-label containing "sub-task" (handles both singular and plural)
+        const subtaskSvgs = document.querySelectorAll('svg[aria-label*="sub-task"]');
 
         subtaskSvgs.forEach(svg => {
             // Get the parent span that contains both the SVG and the text
             const span = svg.parentElement;
             if (!span) return;
 
-            // Find the text content (e.g., "2/5")
+            // Find the text content (e.g., "2/5" or "0/1")
             const textSpan = span.querySelector('span[aria-hidden="true"]');
             if (!textSpan) return;
 
