@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Todoist Filter Tidy
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  Clean up filter view
 // @author       You
 // @match        https://app.todoist.com/app/*

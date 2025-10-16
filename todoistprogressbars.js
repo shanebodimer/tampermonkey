@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Todoist Progress Bars
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  Add progress bars to tasks with subtasks
 // @author       You
 // @match        https://app.todoist.com/app/*
