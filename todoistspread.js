@@ -125,9 +125,112 @@
 
     // Flags to prevent infinite loops and duplicate calls
     let isInitialized = false
+    let monitoringEnabled = false
+    let refreshButton = null
 
     // Fetch tasks on load
     fetchProjectTasks().catch(() => {})
+
+    // Function to set up network monitoring using PerformanceObserver
+    function setupNetworkMonitoring() {
+        // Use PerformanceObserver to watch for network requests
+        try {
+            const observer = new PerformanceObserver((list) => {
+                if (!monitoringEnabled) return
+
+                for (const entry of list.getEntries()) {
+                    if (
+                        entry.entryType === 'resource' &&
+                        entry.name.includes('/api/v1/sync')
+                    ) {
+                        console.log(
+                            'Todoist Spread: Detected sync API call via PerformanceObserver:',
+                            entry.name
+                        )
+                        if (refreshButton && !refreshButton.disabled) {
+                            console.log(
+                                'Todoist Spread: Triggering refresh button'
+                            )
+                            refreshButton.click()
+                        } else {
+                            console.log(
+                                'Todoist Spread: Refresh button not available or disabled'
+                            )
+                        }
+                    }
+                }
+            })
+
+            observer.observe({ entryTypes: ['resource'] })
+            console.log(
+                'Todoist Spread: PerformanceObserver set up successfully'
+            )
+        } catch (e) {
+            console.error(
+                'Todoist Spread: Failed to set up PerformanceObserver:',
+                e
+            )
+        }
+
+        // Also intercept fetch as backup
+        const originalFetch = window.fetch
+        window.fetch = function (...args) {
+            const url = args[0]
+            if (monitoringEnabled && typeof url === 'string') {
+                console.log('Todoist Spread: Fetch call detected:', url)
+                if (url.includes('/api/v1/sync')) {
+                    console.log(
+                        'Todoist Spread: Sync API call detected via fetch, triggering refresh'
+                    )
+                    if (refreshButton && !refreshButton.disabled) {
+                        refreshButton.click()
+                    }
+                }
+            }
+            return originalFetch.apply(this, args)
+        }
+
+        // Intercept XMLHttpRequest as backup
+        const originalXHROpen = XMLHttpRequest.prototype.open
+        XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+            if (monitoringEnabled && typeof url === 'string') {
+                console.log('Todoist Spread: XHR call detected:', url)
+                if (url.includes('/api/v1/sync')) {
+                    console.log(
+                        'Todoist Spread: Sync API call detected via XHR, triggering refresh'
+                    )
+                    if (refreshButton && !refreshButton.disabled) {
+                        refreshButton.click()
+                    }
+                }
+            }
+            return originalXHROpen.apply(this, [method, url, ...rest])
+        }
+
+        console.log('Todoist Spread: All network interception methods set up')
+    }
+
+    // Enable monitoring 10 seconds after page load
+    function enableMonitoringAfterDelay() {
+        setTimeout(() => {
+            monitoringEnabled = true
+            console.log('Todoist Spread: Network monitoring ENABLED')
+            console.log(
+                'Todoist Spread: Refresh button reference:',
+                refreshButton
+            )
+        }, 10000) // 10 seconds
+    }
+
+    // Setup network monitoring immediately
+    setupNetworkMonitoring()
+
+    // Start monitoring after delay when page is fully loaded
+    if (document.readyState === 'complete') {
+        enableMonitoringAfterDelay()
+    } else {
+        window.addEventListener('load', enableMonitoringAfterDelay)
+    }
 
     // Add Chart.js CSS and custom styles
     GM_addStyle(`${GM_getResourceText('CHART_JS_CSS')}
@@ -372,8 +475,8 @@
             },
         })
 
-        // Create refresh button
-        const refreshButton = createElement('button', {
+        // Create refresh button and store globally for network monitoring
+        refreshButton = createElement('button', {
             props: {
                 className: 'tampermonkey-refresh-button',
                 textContent: 'Refresh',
