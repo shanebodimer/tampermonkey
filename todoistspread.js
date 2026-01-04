@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Todoist Spread
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.3
 // @description  Display chart in sidebar
 // @author       You
 // @match        https://app.todoist.com/app/*
@@ -22,9 +22,10 @@
     // ========== TODOIST API CODE ==========
     // Todoist API Configuration
     const EXCLUDE_PROJECT = 'PROJECT_ID'
+    const INBOX_PROJECT = 'PROJECT_ID' // Get from API response
     const API_TOKEN = 'TOKEN'
     const API_BASE_URL = 'https://api.todoist.com/api/v1/tasks/filter'
-    const QUERY_FILTER = '7%20days'
+    const QUERY_FILTER = 'overdue | 7 days | #Inbox'
     const PAGE_LIMIT = 200 // Maximum allowed by Todoist API
 
     // Function to fetch tasks for the next 7 days with pagination support
@@ -36,7 +37,9 @@
 
             do {
                 // Build URL with limit and optional cursor
-                let url = `${API_BASE_URL}?query=${QUERY_FILTER}&limit=${PAGE_LIMIT}`
+                let url = `${API_BASE_URL}?query=${encodeURIComponent(
+                    QUERY_FILTER
+                )}&limit=${PAGE_LIMIT}`
                 if (nextCursor) {
                     url += `&cursor=${encodeURIComponent(nextCursor)}`
                 }
@@ -77,7 +80,7 @@
         const today = new Date()
         today.setHours(0, 0, 0, 0)
 
-        // Initialize data structure for 7 days
+        // Initialize data structure for 7 days (today through next 6 days)
         const dayData = Array(7)
             .fill(null)
             .map(() => ({
@@ -85,13 +88,24 @@
                 priority2: 0,
                 priority3: 0,
                 priority4: 0,
+                overdue: 0,
+                inbox: 0,
             }))
 
         tasks.forEach((task) => {
-            if (!task.due || !task.due.date) return
-
             // Exclude tasks from specific project
             if (task.project_id === EXCLUDE_PROJECT) return
+
+            // Check if task is from inbox project
+            const isInboxTask = task.project_id === INBOX_PROJECT
+
+            // Inbox tasks always go to today regardless of due date
+            if (isInboxTask) {
+                dayData[0].inbox++
+                return
+            }
+
+            if (!task.due || !task.due.date) return
 
             // Parse task due date in local timezone (not UTC)
             const [year, month, day] = task.due.date.split('-').map(Number)
@@ -102,19 +116,32 @@
                 (dueDate - today) / (1000 * 60 * 60 * 24)
             )
 
-            // Only count tasks in the next 7 days
-            if (dayOffset >= 0 && dayOffset < 7) {
-                // Todoist priority: 1=normal(p4), 2=p3, 3=p2, 4=p1
-                const priority = task.priority || 1
+            // Todoist priority: 1=normal(p4), 2=p3, 3=p2, 4=p1
+            const priority = task.priority || 1
 
-                if (priority === 4) {
-                    dayData[dayOffset].priority1++
+            let targetIndex = -1
+            let isOverdue = false
+
+            // Check if overdue or within next 7 days
+            if (dayOffset < 0) {
+                targetIndex = 0 // Overdue tasks go to today column
+                isOverdue = true
+            } else if (dayOffset >= 0 && dayOffset < 7) {
+                targetIndex = dayOffset // No shift needed
+            }
+
+            // Count task in appropriate column and priority
+            if (targetIndex >= 0) {
+                if (isOverdue) {
+                    dayData[targetIndex].overdue++
+                } else if (priority === 4) {
+                    dayData[targetIndex].priority1++
                 } else if (priority === 3) {
-                    dayData[dayOffset].priority2++
+                    dayData[targetIndex].priority2++
                 } else if (priority === 2) {
-                    dayData[dayOffset].priority3++
+                    dayData[targetIndex].priority3++
                 } else {
-                    dayData[dayOffset].priority4++
+                    dayData[targetIndex].priority4++
                 }
             }
         })
@@ -357,6 +384,7 @@
                             gridLines: {
                                 display: false,
                             },
+                            categoryPercentage: 0.85,
                         },
                     ],
                     yAxes: [
@@ -420,7 +448,7 @@
             const tasks = await fetchProjectTasks()
             dayData = aggregateTasksByDayAndPriority(tasks)
         } catch (error) {
-            // Use empty data if fetch fails
+            // Use empty data if fetch fails (7 days)
             dayData = Array(7)
                 .fill(null)
                 .map(() => ({
@@ -428,23 +456,27 @@
                     priority2: 0,
                     priority3: 0,
                     priority4: 0,
+                    overdue: 0,
+                    inbox: 0,
                 }))
         }
 
         // Update chart data
         chartInstance.data.labels = dayLabels
-        chartInstance.data.datasets[0].data = dayData.map(
+        chartInstance.data.datasets[0].data = dayData.map((day) => day.inbox)
+        chartInstance.data.datasets[1].data = dayData.map(
             (day) => day.priority4
         )
-        chartInstance.data.datasets[1].data = dayData.map(
+        chartInstance.data.datasets[2].data = dayData.map(
             (day) => day.priority3
         )
-        chartInstance.data.datasets[2].data = dayData.map(
+        chartInstance.data.datasets[3].data = dayData.map(
             (day) => day.priority2
         )
-        chartInstance.data.datasets[3].data = dayData.map(
+        chartInstance.data.datasets[4].data = dayData.map(
             (day) => day.priority1
         )
+        chartInstance.data.datasets[5].data = dayData.map((day) => day.overdue)
         chartInstance.update()
     }
 
@@ -557,7 +589,7 @@
             const tasks = await fetchProjectTasks()
             dayData = aggregateTasksByDayAndPriority(tasks)
         } catch (error) {
-            // Use empty data if fetch fails
+            // Use empty data if fetch fails (7 days)
             dayData = Array(7)
                 .fill(null)
                 .map(() => ({
@@ -565,6 +597,8 @@
                     priority2: 0,
                     priority3: 0,
                     priority4: 0,
+                    overdue: 0,
+                    inbox: 0,
                 }))
         }
 
@@ -572,6 +606,14 @@
         const chartData = {
             labels: dayLabels,
             datasets: [
+                {
+                    label: 'Unsorted',
+                    data: dayData.map((day) => day.inbox),
+                    backgroundColor: 'rgba(80, 80, 80, 1)',
+                    datalabels: {
+                        display: false,
+                    },
+                },
                 {
                     label: 'P4',
                     data: dayData.map((day) => day.priority4),
@@ -601,6 +643,14 @@
                     data: dayData.map((day) => day.priority1),
                     backgroundColor: 'rgba(255, 112, 102, 1)',
                     datalabels: {
+                        display: false,
+                    },
+                },
+                {
+                    label: 'Overdue',
+                    data: dayData.map((day) => day.overdue),
+                    backgroundColor: 'rgba(207, 71, 58, 1)',
+                    datalabels: {
                         color: 'rgba(255,255,255,0.5)',
                         anchor: 'end',
                         align: 'top',
@@ -614,7 +664,9 @@
                                 datasets[0].data[dataIndex] +
                                 datasets[1].data[dataIndex] +
                                 datasets[2].data[dataIndex] +
-                                datasets[3].data[dataIndex]
+                                datasets[3].data[dataIndex] +
+                                datasets[4].data[dataIndex] +
+                                datasets[5].data[dataIndex]
                             return total > 0 ? total : ''
                         },
                     },
