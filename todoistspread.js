@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Todoist Spread
 // @namespace    http://tampermonkey.net/
-// @version      1.3
+// @version      1.4
 // @description  Display chart in sidebar
 // @author       You
 // @match        https://app.todoist.com/app/*
@@ -21,9 +21,10 @@
 
     // ========== TODOIST API CODE ==========
     // Todoist API Configuration
-    const EXCLUDE_PROJECT = 'PROJECT_ID'
-    const INBOX_PROJECT = 'PROJECT_ID' // Get from API response
-    const API_TOKEN = 'TOKEN'
+    const EXCLUDE_PROJECTS = ['proj_id', 'proj_id']
+    const EXCLUDE_TASKS = ['task_id', 'task_id']
+    const INBOX_PROJECT = 'inbox_prod_id'
+    const API_TOKEN = 'api_token'
     const API_BASE_URL = 'https://api.todoist.com/api/v1/tasks/filter'
     const QUERY_FILTER = 'overdue | 7 days | #Inbox'
     const PAGE_LIMIT = 200 // Maximum allowed by Todoist API
@@ -94,7 +95,10 @@
 
         tasks.forEach((task) => {
             // Exclude tasks from specific project
-            if (task.project_id === EXCLUDE_PROJECT) return
+            if (EXCLUDE_PROJECTS.includes(task.project_id)) return
+
+            // Exclude specific tasks
+            if (EXCLUDE_TASKS.includes(task.id)) return
 
             // Check if task is from inbox project
             const isInboxTask = task.project_id === INBOX_PROJECT
