@@ -1,21 +1,20 @@
 // ==UserScript==
 // @name         Todoist Progress Bars
 // @namespace    http://tampermonkey.net/
-// @version      1.1
-// @description  Add progress bars to tasks with subtasks
+// @version      2.0
+// @description  Add progress bars to tasks with subtasks (perf-safe)
 // @author       You
 // @match        https://app.todoist.com/app/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=todoist.com
 // @grant        none
 // @updateURL    https://raw.githubusercontent.com/shanebodimer/tampermonkey/refs/heads/main/todoistprogressbars.js
 // @downloadURL  https://raw.githubusercontent.com/shanebodimer/tampermonkey/refs/heads/main/todoistprogressbars.js
-
 // ==/UserScript==
-(function() {
-    'use strict';
+;(function () {
+    'use strict'
 
     // Add CSS for progress bars
-    const style = document.createElement('style');
+    const style = document.createElement('style')
     style.textContent = `
         .custom-progress-bar {
             width: 100px;
@@ -27,65 +26,100 @@
             vertical-align: middle;
             margin-top: 2px;
         }
-
         .custom-progress-fill {
             height: 100%;
             background-color: #CCC;
             transition: width 0.3s ease;
         }
-    `;
-    document.head.appendChild(style);
+    `
+    document.head.appendChild(style)
 
-    // Function to add progress bars
+    // --- perf guards ---
+    let observer = null
+    let selfMutating = false // true while WE are touching the DOM, so we ignore our own mutations
+    let scheduled = false // rAF debounce flag
+
     function addProgressBars() {
-        // Find all subtask indicators by looking for the SVG with aria-label containing "sub-task" (handles both singular and plural)
-        const subtaskSvgs = document.querySelectorAll('svg[aria-label*="sub-task"]');
+        const subtaskSvgs = document.querySelectorAll(
+            'svg[aria-label*="sub-task"]'
+        )
 
-        subtaskSvgs.forEach(svg => {
-            // Get the parent span that contains both the SVG and the text
-            const span = svg.parentElement;
-            if (!span) return;
+        subtaskSvgs.forEach((svg) => {
+            const span = svg.parentElement
+            if (!span) return
 
-            // Find the text content (e.g., "2/5" or "0/1")
-            const textSpan = span.querySelector('span[aria-hidden="true"]');
-            if (!textSpan) return;
+            const textSpan = span.querySelector('span[aria-hidden="true"]')
+            if (!textSpan) return
 
-            const text = textSpan.textContent.trim();
-            const match = text.match(/(\d+)\/(\d+)/);
+            const text = textSpan.textContent.trim()
+            const match = text.match(/(\d+)\/(\d+)/)
+            if (!match) return
 
-            if (match) {
-                const completed = parseInt(match[1]);
-                const total = parseInt(match[2]);
-                const percentage = (completed / total) * 100;
+            const completed = parseInt(match[1], 10)
+            const total = parseInt(match[2], 10)
+            const percentage = total > 0 ? (completed / total) * 100 : 0
 
-                // Check if progress bar already exists after the span
-                let progressBar = span.nextElementSibling;
-                if (progressBar && progressBar.classList.contains('custom-progress-bar')) {
-                    // Update existing progress bar
-                    const progressFill = progressBar.querySelector('.custom-progress-fill');
-                    if (progressFill) {
-                        progressFill.style.width = `${percentage}%`;
+            let progressBar = span.nextElementSibling
+            if (
+                progressBar &&
+                progressBar.classList.contains('custom-progress-bar')
+            ) {
+                // Update existing — but only write to the DOM if the value actually changed.
+                const progressFill = progressBar.querySelector(
+                    '.custom-progress-fill'
+                )
+                if (progressFill) {
+                    const desired = `${percentage}%`
+                    if (progressFill.style.width !== desired) {
+                        progressFill.style.width = desired
                     }
-                } else {
-                    // Create new progress bar
-                    progressBar = document.createElement('div');
-                    progressBar.className = 'custom-progress-bar';
-
-                    const progressFill = document.createElement('div');
-                    progressFill.className = 'custom-progress-fill';
-                    progressFill.style.width = `${percentage}%`;
-
-                    progressBar.appendChild(progressFill);
-                    span.parentNode.insertBefore(progressBar, span.nextSibling);
                 }
+            } else {
+                // Create new
+                progressBar = document.createElement('div')
+                progressBar.className = 'custom-progress-bar'
+                const progressFill = document.createElement('div')
+                progressFill.className = 'custom-progress-fill'
+                progressFill.style.width = `${percentage}%`
+                progressBar.appendChild(progressFill)
+                span.parentNode.insertBefore(progressBar, span.nextSibling)
             }
-        });
+        })
     }
 
-    // Run initially
-    addProgressBars();
+    // Run our DOM writes inside a "self-mutating" window and temporarily
+    // disconnect the observer so our own insertions can never re-trigger us.
+    function runGuarded() {
+        scheduled = false
+        selfMutating = true
+        if (observer) observer.disconnect()
+        try {
+            addProgressBars()
+        } finally {
+            if (observer) observer.observe(target, observeOpts)
+            selfMutating = false
+        }
+    }
 
-    // Watch for changes
-    const observer = new MutationObserver(addProgressBars);
-    observer.observe(document.body, { childList: true, subtree: true });
-})();
+    // Coalesce many mutations into at most one run per animation frame.
+    function schedule() {
+        if (scheduled || selfMutating) return
+        scheduled = true
+        requestAnimationFrame(runGuarded)
+    }
+
+    // Observe the app content container if we can find it, else fall back to body.
+    // Narrower target = far fewer irrelevant mutations to process.
+    const target =
+        document.querySelector('[data-testid="app"]') ||
+        document.querySelector('main') ||
+        document.body
+
+    const observeOpts = { childList: true, subtree: true }
+
+    observer = new MutationObserver(() => schedule())
+    observer.observe(target, observeOpts)
+
+    // Initial pass
+    schedule()
+})()
